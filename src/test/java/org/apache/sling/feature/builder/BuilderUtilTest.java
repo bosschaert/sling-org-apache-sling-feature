@@ -396,7 +396,7 @@ public class BuilderUtilTest {
     @Test public void testSelectArtifactOverrideAll() {
         Artifact a1 = new Artifact(ArtifactId.fromMvnId("gid:aid:1"));
         Artifact a2 = new Artifact(ArtifactId.fromMvnId("gid:aid:2"));
-        List<String> overrides = Collections.singletonList("gid:aid:ALL");
+        List<String> overrides = Arrays.asList("gid:aid2:1", "gid:aid:ALL ");
         assertEquals(Arrays.asList(a1, a2), BuilderUtil.selectArtifactOverride(a1, a2, overrides));
     }
 
@@ -414,11 +414,43 @@ public class BuilderUtilTest {
         assertEquals(Collections.singletonList(a2), BuilderUtil.selectArtifactOverride(a1, a2, overrides));
     }
 
+    @Test(expected=IllegalStateException.class)
+    public void testSelectArtifactOverride3() {
+        Artifact a1 = new Artifact(ArtifactId.fromMvnId("gid:aid:1"));
+        Artifact a2 = new Artifact(ArtifactId.fromMvnId("gid:aid:2"));
+        List<String> overrides = Collections.singletonList("gid:aid:3");
+        BuilderUtil.selectArtifactOverride(a1, a2, overrides);
+    }
+
+    @Test(expected=IllegalStateException.class)
+    public void testSelectArtifactOverrideDifferentGroupID() {
+        Artifact a1 = new Artifact(ArtifactId.fromMvnId("aid:aid:1"));
+        Artifact a2 = new Artifact(ArtifactId.fromMvnId("gid:aid:2"));
+        List<String> overrides = Collections.singletonList("gid:aid:2");
+        BuilderUtil.selectArtifactOverride(a1, a2, overrides);
+    }
+
+    @Test(expected=IllegalStateException.class)
+    public void testSelectArtifactOverrideDifferentArtifactID() {
+        Artifact a1 = new Artifact(ArtifactId.fromMvnId("gid:gid:1"));
+        Artifact a2 = new Artifact(ArtifactId.fromMvnId("gid:aid:2"));
+        List<String> overrides = Collections.singletonList("gid:aid:2");
+        BuilderUtil.selectArtifactOverride(a1, a2, overrides);
+    }
+
+    @Test(expected=IllegalStateException.class)
+    public void testSelectArtifactOverrideDifferentNoRule() {
+        Artifact a1 = new Artifact(ArtifactId.fromMvnId("gid:aid:1"));
+        Artifact a2 = new Artifact(ArtifactId.fromMvnId("gid:aid:2"));
+        BuilderUtil.selectArtifactOverride(a1, a2, Collections.emptyList());
+    }
+
     @Test public void testSelectArtifactOverrideHigest() {
         Artifact a1 = new Artifact(ArtifactId.fromMvnId("gid:aid:1.1"));
         Artifact a2 = new Artifact(ArtifactId.fromMvnId("gid:aid:2.0.1"));
         List<String> overrides = Collections.singletonList("gid:aid:HIGHEST");
         assertEquals(Collections.singletonList(a2), BuilderUtil.selectArtifactOverride(a1, a2, overrides));
+        assertEquals(Collections.singletonList(a2), BuilderUtil.selectArtifactOverride(a2, a1, overrides));
     }
 
     @SafeVarargs

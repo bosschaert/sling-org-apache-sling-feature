@@ -23,6 +23,7 @@ import org.apache.sling.feature.Configurations;
 import org.apache.sling.feature.Extension;
 import org.apache.sling.feature.Feature;
 import org.apache.sling.feature.FeatureConstants;
+import org.osgi.framework.Version;
 import org.osgi.resource.Capability;
 import org.osgi.resource.Requirement;
 
@@ -163,16 +164,20 @@ class BuilderUtil {
 
         if (!a1gid.equals(a2gid))
             throw new IllegalStateException("Artifacts must have the same group ID: " + a1 + " and " + a2);
-        if (!a2aid.equals(a2aid))
+        if (!a1aid.equals(a2aid))
             throw new IllegalStateException("Artifacts must have the same artifact ID: " + a1 + " and " + a2);
 
         String prefix = a1gid + ":" + a1aid + ":";
         for (String o : artifactOverrides) {
             if (o.startsWith(prefix)) {
-                String rule = o.substring(prefix.length());
+                String rule = o.substring(prefix.length()).trim();
 
-                if ("ALL".equalsIgnoreCase(rule)) {
+                if ("ALL".equals(rule)) {
                     return Arrays.asList(a1, a2);
+                } else if ("HIGHEST".equals(rule)) {
+                    Version a1v = a1.getId().getOSGiVersion();
+                    Version a2v = a2.getId().getOSGiVersion();
+                    return a1v.compareTo(a2v) > 0 ? Collections.singletonList(a1) : Collections.singletonList(a2);
                 } else if (a1.getId().getVersion().equals(rule)) {
                     return Collections.singletonList(a1);
                 } else if (a2.getId().getVersion().equals(rule)) {
