@@ -129,7 +129,7 @@ class BuilderUtil {
                 Artifact existing = target.getSame(a.getId());
                 Artifact addedArtifact = null;
                 if (existing != null) {
-                    List<Artifact> selectedArtifacts = selectArtifactOverride(a, existing, artifactOverrides);
+                    List<Artifact> selectedArtifacts = new ArrayList<>(selectArtifactOverride(a, existing, artifactOverrides));
 
                     if (!selectedArtifacts.contains(existing)) {
                         target.removeExact(existing.getId());
@@ -157,6 +157,11 @@ class BuilderUtil {
     }
 
     static List<Artifact> selectArtifactOverride(Artifact a1, Artifact a2, List<String> artifactOverrides) {
+        if (a1.getId().equals(a2.getId())) {
+            // They're the same so return one of them
+            return Collections.singletonList(a1);
+        }
+
         String a1gid = a1.getId().getGroupId();
         String a1aid = a1.getId().getArtifactId();
         String a2gid = a2.getId().getGroupId();

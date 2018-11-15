@@ -400,6 +400,12 @@ public class BuilderUtilTest {
         assertEquals(Arrays.asList(a1, a2), BuilderUtil.selectArtifactOverride(a1, a2, overrides));
     }
 
+    @Test public void testSelectArtifactOverrideIdenticalNeedsNoRule() {
+        Artifact a1 = new Artifact(ArtifactId.fromMvnId("gid:aid:1"));
+        Artifact a2 = new Artifact(ArtifactId.fromMvnId("gid:aid:1"));
+        assertEquals(Collections.singletonList(a1), BuilderUtil.selectArtifactOverride(a1, a2, Collections.emptyList()));
+    }
+
     @Test public void testSelectArtifactOverride1() {
         Artifact a1 = new Artifact(ArtifactId.fromMvnId("gid:aid:1"));
         Artifact a2 = new Artifact(ArtifactId.fromMvnId("gid:aid:2"));

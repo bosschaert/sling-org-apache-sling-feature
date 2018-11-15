@@ -311,8 +311,14 @@ public class FeatureBuilderTest {
         co3.getProperties().put("prop", "value");
         result.getConfigurations().add(co3);
 
+        BuilderContext builderContext = new BuilderContext(provider);
+        builderContext.addArtifactsOverrides(Arrays.asList(
+                "group:testnewversion_low:HIGHEST",
+                "group:testnewversion_high:HIGHEST",
+                "group:testnewstartlevelandversion:HIGHEST"));
+
         // assemble
-        final Feature assembled = FeatureBuilder.assemble(base, new BuilderContext(provider));
+        final Feature assembled = FeatureBuilder.assemble(base, builderContext);
 
         // and test
         equals(result, assembled);
