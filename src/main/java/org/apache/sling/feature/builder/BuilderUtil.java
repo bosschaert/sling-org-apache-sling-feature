@@ -187,7 +187,7 @@ class BuilderUtil {
                 throw new IllegalStateException("Override rule " + o + " not applicable to artifacts " + a1 + " and " + a2);
             }
         }
-        throw new IllegalStateException("Artifact override rule required to select between these two artifacts" +
+        throw new IllegalStateException("Artifact override rule required to select between these two artifacts " +
                 a1 + " and " + a2);
     }
 
