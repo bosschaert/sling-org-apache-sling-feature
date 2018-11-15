@@ -23,13 +23,14 @@ import org.apache.sling.feature.Configurations;
 import org.apache.sling.feature.Extension;
 import org.apache.sling.feature.Feature;
 import org.apache.sling.feature.FeatureConstants;
-import org.apache.sling.feature.builder.BuilderContext.ArtifactMergeAlgorithm;
 import org.osgi.resource.Capability;
 import org.osgi.resource.Requirement;
 
 import java.io.StringReader;
 import java.io.StringWriter;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.List;
@@ -121,24 +122,30 @@ class BuilderUtil {
     static void mergeBundles(final Bundles target,
         final Bundles source,
         final Feature originatingFeature,
-            final ArtifactMergeAlgorithm artifactMergeAlg) {
+        final List<String> artifactOverrides) {
         for(final Map.Entry<Integer, List<Artifact>> entry : source.getBundlesByStartOrder().entrySet()) {
             for(final Artifact a : entry.getValue()) {
-                // version handling - use provided algorithm
-                boolean replace = true;
-                if (artifactMergeAlg == ArtifactMergeAlgorithm.HIGHEST) {
-                    final Artifact existing = target.getSame(a.getId());
-                    if ( existing != null && existing.getId().getOSGiVersion().compareTo(a.getId().getOSGiVersion()) > 0 ) {
-                        replace = false;
+                Artifact existing = target.getSame(a.getId());
+                Artifact addedArtifact = null;
+                if (existing != null) {
+                    List<Artifact> selectedArtifacts = selectArtifactOverride(a, existing, artifactOverrides);
+
+                    if (!selectedArtifacts.contains(existing)) {
+                        target.removeExact(existing.getId());
                     }
+                    selectedArtifacts.remove(existing);
+                    if (selectedArtifacts.size() > 0)
+                        addedArtifact = selectedArtifacts.get(0);
+                } else {
+                    addedArtifact = a;
                 }
-                if ( replace ) {
-                    target.removeSame(a.getId());
+
+                if (addedArtifact != null) {
                     // create a copy to detach artifact from source
-                    final Artifact cp = a.copy(a.getId());
+                    final Artifact cp = addedArtifact.copy(addedArtifact.getId());
                     // Record the original feature of the bundle
                     if (originatingFeature != null
-                            && a.getMetadata().get(FeatureConstants.ARTIFACT_ATTR_ORIGINAL_FEATURE) == null) {
+                            && addedArtifact.getMetadata().get(FeatureConstants.ARTIFACT_ATTR_ORIGINAL_FEATURE) == null) {
                         cp.getMetadata().put(FeatureConstants.ARTIFACT_ATTR_ORIGINAL_FEATURE,
                                 originatingFeature.getId().toMvnId());
                     }
@@ -146,6 +153,36 @@ class BuilderUtil {
                 }
             }
         }
+    }
+
+    static List<Artifact> selectArtifactOverride(Artifact a1, Artifact a2, List<String> artifactOverrides) {
+        String a1gid = a1.getId().getGroupId();
+        String a1aid = a1.getId().getArtifactId();
+        String a2gid = a2.getId().getGroupId();
+        String a2aid = a2.getId().getArtifactId();
+
+        if (!a1gid.equals(a2gid))
+            throw new IllegalStateException("Artifacts must have the same group ID: " + a1 + " and " + a2);
+        if (!a2aid.equals(a2aid))
+            throw new IllegalStateException("Artifacts must have the same artifact ID: " + a1 + " and " + a2);
+
+        String prefix = a1gid + ":" + a1aid + ":";
+        for (String o : artifactOverrides) {
+            if (o.startsWith(prefix)) {
+                String rule = o.substring(prefix.length());
+
+                if ("ALL".equalsIgnoreCase(rule)) {
+                    return Arrays.asList(a1, a2);
+                } else if (a1.getId().getVersion().equals(rule)) {
+                    return Collections.singletonList(a1);
+                } else if (a2.getId().getVersion().equals(rule)) {
+                    return Collections.singletonList(a2);
+                }
+                throw new IllegalStateException("Override rule " + o + " not applicable to artifacts " + a1 + " and " + a2);
+            }
+        }
+        throw new IllegalStateException("Artifact override rule required to select between these two artifacts" +
+                a1 + " and " + a2);
     }
 
     // configurations - merge / override
@@ -204,8 +241,9 @@ class BuilderUtil {
      * @param artifactMergeAlg   The merge algorithm for artifacts
      */
     static void mergeExtensions(final Extension target,
-            final Extension source, final Feature originatingFeature,
-            final ArtifactMergeAlgorithm artifactMergeAlg) {
+            final Extension source,
+            final Feature originatingFeature,
+            final List<String> artifactOverwrites) {
         switch ( target.getType() ) {
             case TEXT : // simply append
                 target.setText(target.getText() + "\n" + source.getText());
@@ -245,23 +283,28 @@ class BuilderUtil {
                 break;
 
         case ARTIFACTS:
-            for (final Artifact a : source.getArtifacts()) {
-                // use artifactMergeAlg
-                boolean replace = true;
-                if (artifactMergeAlg == ArtifactMergeAlgorithm.HIGHEST) {
-                    final Artifact existing = target.getArtifacts().getSame(a.getId());
-                    if (existing != null
-                            && existing.getId().getOSGiVersion().compareTo(a.getId().getOSGiVersion()) > 0) {
-                        replace = false;
+            for(final Artifact a : source.getArtifacts()) {
+                Artifact existing = target.getArtifacts().getSame(a.getId());
+                Artifact addedArtifact = null;
+                if (existing != null) {
+                    List<Artifact> selectedArtifacts = selectArtifactOverride(a, existing, artifactOverwrites);
+
+                    if (!selectedArtifacts.contains(existing)) {
+                        target.getArtifacts().removeExact(existing.getId());
                     }
+                    selectedArtifacts.remove(existing);
+                    if (selectedArtifacts.size() > 0)
+                        addedArtifact = selectedArtifacts.get(0);
+                } else {
+                    addedArtifact = a;
                 }
-                if (replace) {
-                    target.getArtifacts().removeSame(a.getId());
+
+                if (addedArtifact != null) {
                     // create a copy to detach artifact from source
-                    final Artifact cp = a.copy(a.getId());
-                    // Record the original feature of the artifact
+                    final Artifact cp = addedArtifact.copy(addedArtifact.getId());
+                    // Record the original feature of the bundle
                     if (originatingFeature != null
-                            && a.getMetadata().get(FeatureConstants.ARTIFACT_ATTR_ORIGINAL_FEATURE) == null) {
+                            && addedArtifact.getMetadata().get(FeatureConstants.ARTIFACT_ATTR_ORIGINAL_FEATURE) == null) {
                         cp.getMetadata().put(FeatureConstants.ARTIFACT_ATTR_ORIGINAL_FEATURE,
                                 originatingFeature.getId().toMvnId());
                     }
@@ -275,7 +318,9 @@ class BuilderUtil {
     // extensions (add/merge)
     static void mergeExtensions(final Feature target,
         final Feature source,
-            final ArtifactMergeAlgorithm artifactMergeAlg, final BuilderContext context, final boolean recordOrigin) {
+        final BuilderContext context,
+        final boolean recordOrigin,
+        final List<String> artifactOverwrites) {
         for(final Extension ext : source.getExtensions()) {
             boolean found = false;
 
@@ -297,7 +342,7 @@ class BuilderUtil {
                     }
                     if ( !handled ) {
                         // default merge
-                        mergeExtensions(current, ext, recordOrigin ? source : null, artifactMergeAlg);
+                        mergeExtensions(current, ext, recordOrigin ? source : null, artifactOverwrites);
                     }
                 }
             }
