@@ -22,7 +22,6 @@ import org.apache.sling.feature.Configuration;
 import org.apache.sling.feature.Configurations;
 import org.apache.sling.feature.Extension;
 import org.apache.sling.feature.Feature;
-import org.apache.sling.feature.FeatureConstants;
 import org.osgi.framework.Version;
 import org.osgi.resource.Capability;
 import org.osgi.resource.Requirement;
@@ -120,18 +119,19 @@ class BuilderUtil {
      * @param source             The source bundles
      * @param sourceFeature Optional, if set origin will be recorded
      * @param artifactMergeAlg   Algorithm used to merge the artifacts
+     * @param originKey          An optional key used to track origins of merged bundles
      */
     static void mergeBundles(final Bundles target,
         final Bundles source,
         final Feature sourceFeature,
-        final List<String> artifactOverrides) {
+        final List<String> artifactOverrides,
+        final String originKey) {
         for(final Map.Entry<Integer, List<Artifact>> entry : source.getBundlesByStartOrder().entrySet()) {
             for(final Artifact a : entry.getValue()) {
                 Artifact existing = target.getSame(a.getId());
                 List<Artifact> selectedArtifacts = null;
                 if (existing != null) {
-                    if (sourceFeature.getId().toMvnId().equals(
-                            existing.getMetadata().get(FeatureConstants.ARTIFACT_ATTR_ORIGINAL_FEATURE))) {
+                    if (sourceFeature.getId().toMvnId().equals(existing.getMetadata().get(originKey))) {
                         // If the source artifact came from the same feature, keep them side-by-side
                         selectedArtifacts = Arrays.asList(existing, a);
                     } else {
@@ -147,11 +147,11 @@ class BuilderUtil {
                 for (Artifact sa : selectedArtifacts) {
                     // create a copy to detach artifact from source
                     final Artifact cp = sa.copy(sa.getId());
-                    // Record the original feature of the bundle
-                    if (sourceFeature != null && source.contains(sa)
-                            && sa.getMetadata().get(FeatureConstants.ARTIFACT_ATTR_ORIGINAL_FEATURE) == null) {
-                        cp.getMetadata().put(FeatureConstants.ARTIFACT_ATTR_ORIGINAL_FEATURE,
-                                sourceFeature.getId().toMvnId());
+                    // Record the original feature of the bundle, if needed
+                    if (originKey != null) {
+                        if (sourceFeature != null && source.contains(sa) && sa.getMetadata().get(originKey) == null) {
+                            cp.getMetadata().put(originKey, sourceFeature.getId().toMvnId());
+                        }
                     }
                     target.add(cp);
                 }
@@ -227,9 +227,6 @@ class BuilderUtil {
                     final String key = keyEnum.nextElement();
                     newCfg.getProperties().put(key, cfg.getProperties().get(key));
                 }
-                if (origin != null) {
-                    newCfg.getProperties().put(Configuration.PROP_ORIGINAL__FEATURE, origin.getId().toMvnId());
-                }
                 target.add(newCfg);
             }
         }
@@ -270,7 +267,8 @@ class BuilderUtil {
     static void mergeExtensions(final Extension target,
             final Extension source,
             final Feature sourceFeature,
-            final List<String> artifactOverrides) {
+            final List<String> artifactOverrides,
+            final String originKey) {
         switch ( target.getType() ) {
             case TEXT : // simply append
                 target.setText(target.getText() + "\n" + source.getText());
@@ -314,8 +312,7 @@ class BuilderUtil {
                 Artifact existing = target.getArtifacts().getSame(a.getId());
                 List<Artifact> selectedArtifacts = null;
                 if (existing != null) {
-                    if (sourceFeature.getId().toMvnId().equals(
-                            existing.getMetadata().get(FeatureConstants.ARTIFACT_ATTR_ORIGINAL_FEATURE))) {
+                    if (sourceFeature.getId().toMvnId().equals(existing.getMetadata().get(originKey))) {
                         // If the source artifact came from the same feature, keep them side-by-side
                         selectedArtifacts = Arrays.asList(existing, a);
                     } else {
@@ -331,11 +328,12 @@ class BuilderUtil {
                 for (Artifact sa : selectedArtifacts) {
                     // create a copy to detach artifact from source
                     final Artifact cp = sa.copy(sa.getId());
-                    // Record the original feature of the bundle
-                    if (sourceFeature != null && source.getArtifacts().contains(sa)
-                            && sa.getMetadata().get(FeatureConstants.ARTIFACT_ATTR_ORIGINAL_FEATURE) == null) {
-                        cp.getMetadata().put(FeatureConstants.ARTIFACT_ATTR_ORIGINAL_FEATURE,
-                                sourceFeature.getId().toMvnId());
+                    // Record the original feature of the bundle if needed
+                    if (originKey != null) {
+                        if (sourceFeature != null && source.getArtifacts().contains(sa)
+                                && sa.getMetadata().get(originKey) == null) {
+                            cp.getMetadata().put(originKey, sourceFeature.getId().toMvnId());
+                        }
                     }
                     target.getArtifacts().add(cp);
                 }
@@ -348,7 +346,8 @@ class BuilderUtil {
     static void mergeExtensions(final Feature target,
         final Feature source,
         final BuilderContext context,
-        final List<String> artifactOverrides) {
+        final List<String> artifactOverrides,
+        final String originKey) {
         for(final Extension ext : source.getExtensions()) {
             boolean found = false;
 
@@ -370,7 +369,7 @@ class BuilderUtil {
                     }
                     if ( !handled ) {
                         // default merge
-                        mergeExtensions(current, ext, source, artifactOverrides);
+                        mergeExtensions(current, ext, source, artifactOverrides, originKey);
                     }
                 }
             }
